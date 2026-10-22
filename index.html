@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Simulador del Loop Vertical</title>
+<meta name="description" content="¿Desde qué altura completa el loop un balín de acero? Simulación 3D con el cálculo paso a paso: dinámica circular, energía y pérdidas por fricción.">
+<meta property="og:title" content="Simulador del Loop Vertical">
+<meta property="og:description" content="Simulación 3D y cálculo paso a paso de la altura mínima para completar un loop. Mecánica Clásica, UTP Huancayo.">
+<meta name="theme-color" content="#1d68c4">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='14' r='10' fill='none' stroke='%231d68c4' stroke-width='3.5'/%3E%3Cpath d='M2 28h28' stroke='%231d68c4' stroke-width='3.5' stroke-linecap='round'/%3E%3Ccircle cx='24' cy='7' r='3.5' fill='%23e0602f'/%3E%3C/svg%3E">
+<script>try{var t=localStorage.getItem('loop-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=STIX+Two+Text:ital@0;1&display=swap">
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">Mecánica Clásica · UTP Huancayo · Proyecto Final</div>
+      <h1>¿Desde qué altura completa el loop el balín?</h1>
+    </div>
+    <nav class="tabs" aria-label="Secciones">
+      <a href="#simulador" data-view="simulador">Simulador</a>
+      <a href="#ensayos" data-view="ensayos">Ensayos</a>
+      <a href="#maqueta" data-view="maqueta">Maqueta</a>
+      <a href="#fuentes" data-view="fuentes">Fuentes</a>
+    </nav>
+    <div class="tools">
+      <button type="button" id="btnTheme"></button>
+      <button type="button" id="btnFull">Pantalla completa</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ===== Simulador: visor + pizarra en una sola pantalla ===== -->
+    <section class="view sim" id="view-simulador" aria-label="Simulador">
+      <div class="main">
+        <div class="viewport" id="viewport">
+          <div class="labels" id="labels"></div>
+          <dl class="hud">
+            <dt>t</dt><dd id="hudT">0.000 s</dd>
+            <dt>v</dt><dd id="hudV">0.00 m/s</dd>
+            <dt>altura</dt><dd id="hudY">—</dd>
+            <dt>N / mg</dt><dd id="hudN">—</dd>
+          </dl>
+          <div class="status idle" id="status" role="status" aria-live="polite"></div>
+          <button type="button" class="estrip" id="estrip" aria-label="Ver la energía en detalle">
+            <span class="bar"><i style="background:var(--s-ep)"></i><i style="background:var(--s-ekt)"></i><i style="background:var(--s-ekr)"></i><i style="background:var(--s-w)"></i></span>
+            <span class="lg"><span><i style="background:var(--s-ep)"></i>potencial</span><span><i style="background:var(--s-ekt)"></i>avance</span><span><i style="background:var(--s-ekr)"></i>giro</span><span><i style="background:var(--s-w)"></i>perdida</span></span>
+          </button>
+        </div>
+        <div class="toolbar">
+          <div class="group">
+            <button class="primary" id="btnPlay" type="button">Soltar balín</button>
+            <button id="btnReset" type="button">Reiniciar</button>
+            <span class="small">Cámara lenta</span>
+            <button type="button" class="spd" data-s="0.2" aria-pressed="false">0.2×</button>
+            <button type="button" class="spd" data-s="0.5" aria-pressed="true">0.5×</button>
+            <button type="button" class="spd" data-s="1" aria-pressed="false">1×</button>
+          </div>
+          <div class="group">
+            <button type="button" class="view-btn" data-v="3d" aria-pressed="true">3D</button>
+            <button type="button" class="view-btn" data-v="front" aria-pressed="false">Frontal</button>
+            <button type="button" class="view-btn" data-v="side" aria-pressed="false">Lateral</button>
+            <button type="button" id="btnFollow" aria-pressed="false">Seguir balín</button>
+            <button type="button" id="btnMore" aria-expanded="false" aria-controls="more">Montaje</button>
+          </div>
+        </div>
+        <form class="controls" id="form" autocomplete="off">
+          <div class="ctl big">
+            <div class="row"><label for="inH">Altura de soltado h</label><output id="outH" for="inH"></output></div>
+            <input type="range" id="inH" min="8" max="60" step="0.1" value="36">
+            <div class="quick">
+              <button type="button" id="qTheo">h mín. teórica</button>
+              <button type="button" id="qSim">h mín. con pérdidas</button>
+              <button type="button" id="qLow">h baja (se despega)</button>
+            </div>
+          </div>
+          <div class="ctl">
+            <div class="row"><label for="inR">Radio R</label><output id="outR" for="inR"></output></div>
+            <input type="range" id="inR" min="8" max="18" step="0.5" value="12">
+            <span class="small">medido hasta el canal donde rueda el balín</span>
+          </div>
+          <div class="ctl">
+            <div class="row"><label for="inMu">Pérdidas μ</label><output id="outMu" for="inMu"></output></div>
+            <input type="range" id="inMu" min="0" max="0.04" step="0.001" value="0.01">
+            <span class="small">resistencia a la rodadura; μ = 0 es la teoría ideal</span>
+          </div>
+          <div class="ctl">
+            <span class="lbl" id="lblModel">Modelo</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lblModel">
+              <input type="radio" name="model" id="mRoll" value="0.4" checked><label for="mRoll">Esfera rueda<small>β = 2/5</small></label>
+              <input type="radio" name="model" id="mSlide" value="0"><label for="mSlide">Partícula<small>β = 0</small></label>
+            </div>
+          </div>
+        </form>
+        <div class="more" id="more" hidden>
+          <div class="moregrid" id="form2">
+            <div class="fld"><label for="inD">Diámetro del balín</label>
+              <select id="inD">
+                <option value="6.35">6.35 mm (¼")</option>
+                <option value="7.94">7.94 mm (5⁄16")</option>
+                <option value="9.53" selected>9.53 mm (⅜")</option>
+                <option value="11.11">11.11 mm (7⁄16")</option>
+              </select></div>
+            <div class="fld"><label for="inMat">Material</label>
+              <select id="inMat"><option value="7850" selected>Acero · 7.85 g/cm³</option><option value="2500">Vidrio · 2.50 g/cm³</option></select></div>
+            <div class="fld"><label for="inID">Ø interior manguera (mm)</label><input type="number" id="inID" min="5" max="30" step="0.1" value="12.7"></div>
+            <div class="fld"><label for="inA">Ángulo de rampa (°)</label><input type="number" id="inA" min="25" max="65" step="1" value="50"></div>
+            <div class="fld"><label for="inG">g en Huancayo (m/s²)</label><input type="number" id="inG" min="9.70" max="9.85" step="0.001" value="9.775"></div>
+          </div>
+          <p class="note" id="fitNote"></p>
+        </div>
+      </div>
+
+      <aside class="side" aria-label="Cálculo y energía">
+        <div class="sidetabs" role="tablist" aria-label="Panel lateral">
+          <button type="button" role="tab" id="tabPizarra" aria-controls="sidePizarra" aria-selected="true">Pizarra</button>
+          <button type="button" role="tab" id="tabEnergia" aria-controls="sideEnergia" aria-selected="false">Energía y normal</button>
+          <span class="zoom" role="group" aria-label="Tamaño de la pizarra">
+            <button type="button" id="zOut" aria-label="Achicar la pizarra">A−</button>
+            <button type="button" id="zIn" aria-label="Agrandar la pizarra">A+</button>
+          </span>
+        </div>
+
+        <div class="sidebody" id="sidePizarra" role="tabpanel" aria-labelledby="tabPizarra">
+          <div class="board" id="pizarra">
+            <p class="bh small">Cálculo en vivo: se actualiza con el montaje. Haz clic en un paso o usa ← → para recorrerlos.</p>
+            <div class="step" id="st1"></div>
+            <div class="step" id="st2"></div>
+            <div class="step" id="st3"></div>
+            <div class="step" id="st4"></div>
+            <div class="step" id="st5"></div>
+          </div>
+        </div>
+
+        <div class="sidebody" id="sideEnergia" role="tabpanel" aria-labelledby="tabEnergia" hidden>
+          <div class="panelsec">
+            <div class="hd"><h3>Energía del balín, en tiempo real</h3><span class="small">mJ · referencia en la base del loop</span></div>
+            <div class="ebars" id="ebars">
+              <div class="ebar"><span class="lab"><i style="background:var(--s-ep)"></i>Potencial mgh</span><span class="val"></span><div class="trk"><div class="fill" style="background:var(--s-ep)"></div></div></div>
+              <div class="ebar"><span class="lab"><i style="background:var(--s-ekt)"></i>Cinética, avance</span><span class="val"></span><div class="trk"><div class="fill" style="background:var(--s-ekt)"></div></div></div>
+              <div class="ebar"><span class="lab"><i style="background:var(--s-ekr)"></i>Cinética, giro</span><span class="val"></span><div class="trk"><div class="fill" style="background:var(--s-ekr)"></div></div></div>
+              <div class="ebar"><span class="lab"><i style="background:var(--s-w)"></i>Perdida (fricción)</span><span class="val"></span><div class="trk"><div class="fill" style="background:var(--s-w)"></div></div></div>
+            </div>
+            <div class="etotal"><span>Suma de las cuatro barras</span><b id="eTot"></b></div>
+          </div>
+          <div class="panelsec">
+            <div class="hd"><h3>Fuerza normal en el loop</h3><span class="small">N / mg según la posición ψ</span></div>
+            <div class="ncv"><canvas id="ncv" role="img" aria-label="Fuerza normal según la posición en el loop"></canvas></div>
+            <div class="legend"><span><i style="border-color:var(--s-ekt)"></i>Simulado, con pérdidas</span><span><i style="border-color:var(--ink-3);border-top-style:dashed"></i>Teoría sin pérdidas</span><span><i style="border-color:var(--crit);border-top-style:dotted"></i>N = 0: se despega</span></div>
+          </div>
+        </div>
+
+        <p class="sidefoot"><kbd>Espacio</kbd> soltar · <kbd>R</kbd> reiniciar · <kbd>←</kbd><kbd>→</kbd> pasos · <kbd>F</kbd> pantalla completa</p>
+      </aside>
+    </section>
+
+    <!-- ===== Ensayos virtuales ===== -->
+    <section class="view page-view" id="view-ensayos" aria-label="Ensayos virtuales" hidden>
+      <div class="page">
+        <div class="sechead">
+          <h2>Ensayos virtuales</h2>
+          <p>Barrido de alturas alrededor del valor teórico con el montaje actual. Haz clic en una fila para verla en el simulador. Es la tabla de resultados del avance, y la misma que repetirán con la maqueta.</p>
+        </div>
+        <div class="tablebox">
+          <div class="tablebar"><span class="small" id="tblInfo"></span><button type="button" id="btnCopy">Copiar tabla</button></div>
+          <div class="scroll"><table class="trials" id="tbl">
+            <thead><tr><th>Ensayo</th><th>h (cm)</th><th>h / R</th><th>Resultado</th><th>v en la cima (m/s)</th><th>N en la cima / mg</th><th>Energía perdida</th></tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Plano de construcción ===== -->
+    <section class="view page-view" id="view-maqueta" aria-label="Plano de construcción" hidden>
+      <div class="page">
+        <div class="sechead">
+          <h2>Plano para armar la maqueta</h2>
+          <p>Es la misma geometría que usa la simulación, en centímetros y con origen en el punto más bajo del loop. La rampa se arma una sola vez hasta la altura máxima; en cada ensayo solo cambia el punto desde donde sueltas el balín.</p>
+          <p class="small" id="planInfo"></p>
+        </div>
+        <div class="build">
+          <div class="card"><div class="plan" id="plan"></div></div>
+          <div class="card">
+            <h3>Cortes de manguera (Ø ½")</h3>
+            <table class="cut" id="cutlist"></table>
+            <h3 style="margin-top:6px">Armado</h3>
+            <ol class="steps" id="buildSteps"></ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Proyecto y fuentes ===== -->
+    <section class="view page-view" id="view-fuentes" aria-label="Fuentes" hidden>
+      <div class="page">
+        <div class="sechead">
+          <h2>Sobre el proyecto</h2>
+          <p>Montaña rusa a escala con manguera de PVC transparente de ½" y un balín de acero de ⅜". La pizarra resuelve el problema con los números del montaje: primero la dinámica circular en la cima, luego la energía, y al final las pérdidas que la teoría ideal no ve.</p>
+        </div>
+        <div class="refs">
+          <div class="card ref">
+            <h3>Antecedentes</h3>
+            <p class="apa">Miljojković, J., Kocović, V., Košarac, A. y Šimunović, K. (2021). Loop-the-loop as a real tribomechanical system applicable in engineering education. <i>Tribology in Industry, 43</i>(4), 667–672. <a href="https://doi.org/10.24874/ti.1210.09.21.11" target="_blank" rel="noopener">https://doi.org/10.24874/ti.1210.09.21.11</a></p>
+            <p>Midieron con un balín de acero las pérdidas por fricción en un loop real y muestran que la regla h = 2.5R no alcanza: en la práctica hace falta h/R ≥ 2.7 o más.</p>
+            <p class="apa">da Silva, N. C. (2015). Looping: solução da lagrangiana, simulação computacional e estratégias didáticas. <i>Caderno Brasileiro de Ensino de Física, 32</i>(3), 963–987. <a href="https://doi.org/10.5007/2175-7941.2015v32n3p963" target="_blank" rel="noopener">https://doi.org/10.5007/2175-7941.2015v32n3p963</a></p>
+            <p>Deduce h = (2 + ½(1 + β))R para una esfera que rueda y el ángulo de desprendimiento, y los resuelve en una simulación. No incluye fricción; esta simulación sí.</p>
+          </div>
+          <div class="card ref">
+            <h3>Supuestos del modelo</h3>
+            <ul class="ass">
+              <li>El balín rueda sin deslizar y su centro sigue un círculo de radio R<sub>ef</sub> = R − r.</li>
+              <li>La pista es rígida: en la maqueta, la manguera va fija al tablero con cinchos y tacos.</li>
+              <li>Las pérdidas se modelan como una fuerza μN opuesta al movimiento; la resistencia del aire se desprecia.</li>
+              <li>Se integra (1 + β) dv/dt = −g sen θ − μN/m con Runge-Kutta de 4.º orden, paso de 0.2 ms. Con μ = 0 la energía se conserva con error menor a 10⁻⁶ J/kg.</li>
+            </ul>
+            <p class="small">Bibliografía base del curso: Serway, R. y Jewett, J., <i>Física para ciencias e ingeniería</i>, vol. 1 (Cengage).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="js/fisica.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,500 +1,3 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Simulador del Loop Vertical</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=STIX+Two+Text:ital@0;1&display=swap">
-<style>
-/* Layout: mesa de exposición. Arriba el banco (visor 3D + pizarra con el cálculo en vivo),
-   luego la energía animada, el plano para construir la maqueta, los ensayos y las fuentes. */
-:root{
-  --paper:#f3f6f6; --panel:#ffffff; --stage:#e6eced; --chalk:#f8faf9;
-  --ink:#13202a; --ink-2:#465661; --ink-3:#77858f; --rule:#d6dee1;
-  --accent:#1d68c4; --accent-soft:#e1ebf8; --accent-ink:#ffffff;
-  --good:#1d7f47; --good-soft:#e1f2e8; --warn:#9a6410; --warn-soft:#fbefd9; --crit:#c2352c; --crit-soft:#fbe4e1;
-  --board:#e9dfca; --board-line:#d3c5a7; --board-major:#a8936c; --wood:#c9b38a;
-  --hose:#86b8ea; --block:#8d7a5a;
-  --s-ep:#eb6834; --s-ekt:#2a78d6; --s-ekr:#1baf7a; --s-w:#6250d6;
-  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
-  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
-  --f-math:"STIX Two Text","Cambria Math","Times New Roman",serif;
-}
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --paper:#0e1418; --panel:#151d23; --stage:#10181d; --chalk:#121a1f;
-  --ink:#e4ebee; --ink-2:#a6b3bb; --ink-3:#73818a; --rule:#26323a;
-  --accent:#4f95ea; --accent-soft:#18293f; --accent-ink:#0b1420;
-  --good:#45b878; --good-soft:#15301f; --warn:#e0a640; --warn-soft:#33270f; --crit:#ee6c62; --crit-soft:#3a1715;
-  --board:#2e2b25; --board-line:#3d3930; --board-major:#5e5646; --wood:#4a4234;
-  --hose:#6aa6e3; --block:#6b5d46;
-  --s-ep:#d95926; --s-ekt:#3987e5; --s-ekr:#199e70; --s-w:#9085e9;
-  color-scheme:dark; } }
-:root[data-theme="dark"]{
-  --paper:#0e1418; --panel:#151d23; --stage:#10181d; --chalk:#121a1f;
-  --ink:#e4ebee; --ink-2:#a6b3bb; --ink-3:#73818a; --rule:#26323a;
-  --accent:#4f95ea; --accent-soft:#18293f; --accent-ink:#0b1420;
-  --good:#45b878; --good-soft:#15301f; --warn:#e0a640; --warn-soft:#33270f; --crit:#ee6c62; --crit-soft:#3a1715;
-  --board:#2e2b25; --board-line:#3d3930; --board-major:#5e5646; --wood:#4a4234;
-  --hose:#6aa6e3; --block:#6b5d46;
-  --s-ep:#d95926; --s-ekt:#3987e5; --s-ekr:#199e70; --s-w:#9085e9;
-  color-scheme:dark; }
-
-*{box-sizing:border-box}
-body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
-  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));}
-.wrap{max-width:1360px;margin:0 auto;padding-block:24px 56px;display:grid;gap:36px}
-h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-0.01em}
-h1{font-weight:800;font-size:clamp(26px,3.6vw,40px);line-height:1.06}
-h2{font-weight:800;font-size:22px;line-height:1.15}
-h3{font-weight:600;font-size:15px}
-p{margin:0}
-.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
-header{display:grid;gap:8px}
-header .lead{max-width:72ch;color:var(--ink-2)}
-.sechead{display:grid;gap:6px;max-width:78ch}
-.sechead p{color:var(--ink-2)}
-.small{font-size:12px;color:var(--ink-3)}
-
-/* ---------- banco ---------- */
-.stage{display:grid;grid-template-columns:minmax(0,1fr) 410px;gap:18px;align-items:start;background:var(--paper)}
-.stage:fullscreen{padding:16px;overflow:auto}
-@media (max-width:1060px){.stage{grid-template-columns:minmax(0,1fr)}}
-.main{display:grid;gap:10px;min-width:0}
-.viewport{position:relative;aspect-ratio:16/10;width:100%;max-width:100%;border:1px solid var(--rule);border-radius:12px;overflow:hidden;background:var(--stage)}
-.stage:fullscreen .viewport{aspect-ratio:auto;height:calc(100vh - 230px)}
-@media (max-width:640px){.viewport{aspect-ratio:4/5}}
-.viewport canvas{display:block;width:100%;height:100%;touch-action:none}
-.labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.tag{position:absolute;transform:translate(0,-50%);font-family:var(--f-mono);font-size:11px;line-height:1.2;color:var(--ink);
-  background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--rule);border-radius:4px;padding:2px 6px;white-space:nowrap;display:flex;gap:6px;align-items:center}
-.tag i{width:10px;height:3px;border-radius:2px;display:inline-block}
-.tag.tick{background:none;border:none;color:var(--ink-3);padding:0;transform:translate(-100%,-50%)}
-.ballmark{position:absolute;width:22px;height:22px;border:2px solid var(--accent);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 20%,transparent)}
-.hud{position:absolute;left:12px;top:12px;margin:0;display:grid;grid-template-columns:auto auto;gap:1px 14px;font-family:var(--f-mono);font-size:12.5px;
-  background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--rule);border-radius:8px;padding:8px 11px;font-variant-numeric:tabular-nums}
-.hud dt{color:var(--ink-3)} .hud dd{margin:0;text-align:right;color:var(--ink);font-weight:500}
-.status{position:absolute;right:12px;top:12px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;border-radius:999px;padding:7px 14px 7px 9px;border:1px solid transparent}
-@media (max-width:640px){.status{top:auto;bottom:12px;right:auto;left:12px}}
-.status svg{width:18px;height:18px;flex:none}
-.status.good{background:var(--good-soft);color:var(--good);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
-.status.warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
-.status.crit{background:var(--crit-soft);color:var(--crit);border-color:color-mix(in srgb,var(--crit) 35%,transparent)}
-.status.idle{background:var(--panel);color:var(--ink-2);border-color:var(--rule)}
-.nogl{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--ink-2)}
-.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
-.group{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-button,.seg label{font:inherit;font-size:13px;font-weight:500;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:7px 12px;cursor:pointer;line-height:1.2}
-button:hover,.seg label:hover{border-color:var(--ink-3)}
-button:focus-visible,.seg input:focus-visible+label,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:8px 18px}
-button.primary:hover{filter:brightness(1.08)}
-button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
-
-/* controles rápidos */
-.controls{background:var(--panel);border:1px solid var(--rule);border-radius:12px;display:grid;grid-template-columns:1.6fr 1fr 1fr 1.25fr;gap:0}
-@media (max-width:900px){.controls{grid-template-columns:1fr 1fr}}
-@media (max-width:520px){.controls{grid-template-columns:1fr}}
-.ctl{padding:12px 14px;display:grid;gap:6px;border-left:1px solid var(--rule);min-width:0;align-content:start}
-.ctl:first-child{border-left:none}
-@media (max-width:900px){.ctl{border-left:none;border-top:1px solid var(--rule)} .ctl:nth-child(-n+2){border-top:none} .ctl:nth-child(2n){border-left:1px solid var(--rule)}}
-@media (max-width:520px){.ctl:nth-child(2n){border-left:none} .ctl:nth-child(2){border-top:1px solid var(--rule)}}
-.ctl .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.ctl label,.ctl .lbl{font-size:12.5px;font-weight:500;color:var(--ink-2)}
-.ctl output{white-space:nowrap;font-family:var(--f-mono);font-size:14px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
-.ctl.big output{font-size:20px;color:var(--accent)}
-input[type=range]{width:100%;accent-color:var(--accent);margin:0}
-.quick{display:flex;flex-wrap:wrap;gap:5px}
-.quick button{font-size:11.5px;padding:4px 8px}
-.seg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.seg input{position:absolute;opacity:0;pointer-events:none}
-.seg label{display:grid;gap:1px;text-align:left;padding:6px 8px;font-size:12.5px}
-.seg label small{font-size:10.5px;color:var(--ink-3);font-weight:400;font-family:var(--f-mono)}
-.seg input:checked+label{background:var(--accent-soft);border-color:var(--accent)}
-details.more{background:var(--panel);border:1px solid var(--rule);border-radius:12px}
-details.more summary{cursor:pointer;padding:10px 14px;font-size:13px;font-weight:500;color:var(--ink-2);list-style-position:inside}
-.moregrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:4px 14px 14px}
-@media (max-width:900px){.moregrid{grid-template-columns:1fr 1fr}}
-.moregrid .fld{display:grid;gap:5px;min-width:0}
-.moregrid label{font-size:12px;color:var(--ink-2)}
-select,input[type=number]{font:inherit;font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:6px 8px;width:100%}
-input[type=number]{font-family:var(--f-mono)}
-.note{font-size:12px;color:var(--ink-3);padding:0 14px 12px}
-.note.warn{color:var(--warn)} .note.crit{color:var(--crit)}
-
-/* ---------- pizarra ---------- */
-.board{background:var(--chalk);border:1px solid var(--rule);border-radius:12px;display:grid;overflow:hidden}
-.board .bh{padding:14px 16px 10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px;border-bottom:1px solid var(--rule)}
-.step{padding:12px 16px;border-bottom:1px solid var(--rule);display:grid;gap:5px;transition:background-color .25s ease, box-shadow .25s ease}
-.step:last-child{border-bottom:none}
-.step.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
-.step .q{display:flex;gap:8px;align-items:baseline;font-size:13.5px;font-weight:600;color:var(--ink)}
-.step .q b{font-family:var(--f-mono);font-size:11px;color:var(--accent);font-weight:600;flex:none}
-.rows{display:grid;gap:4px;margin-top:2px}
-.r{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px;align-items:baseline}
-.r .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
-.r .v{min-width:0}
-.r.out{margin-top:2px;padding-top:6px;border-top:1px dashed var(--rule)}
-.chip{display:inline-block;font-family:var(--f-mono);font-size:12px;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:5px;padding:1px 6px;margin:0 4px 3px 0;font-variant-numeric:tabular-nums}
-.res{font-family:var(--f-mono);font-size:15px;font-weight:600;color:var(--ink);background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:4px;padding:1px 6px}
-.r .good{color:var(--good);font-size:12.5px;font-weight:500} .r .crit{color:var(--crit);font-size:12.5px;font-weight:500}
-.why .good{color:var(--good)} .why .crit{color:var(--crit)}
-.f{font-family:var(--f-math);font-size:17px;line-height:1.6;color:var(--ink);overflow-wrap:anywhere}
-.f i{font-style:italic}
-.sub{font-family:var(--f-mono);font-size:13px;line-height:1.6;color:var(--ink-2);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
-.sub .n{color:var(--accent);font-weight:500}
-.sub b{color:var(--ink);font-weight:600;background:color-mix(in srgb,var(--accent) 14%,transparent);border-radius:3px;padding:0 4px}
-.sub .crit{color:var(--crit)} .sub .good{color:var(--good)}
-.why{font-size:12.5px;color:var(--ink-3);line-height:1.45}
-.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:.82em;margin:0 2px}
-.frac>span:first-child{border-bottom:1px solid currentColor;padding:0 3px}
-.frac>span{line-height:1.2}
-
-/* ---------- energía en vivo ---------- */
-.live{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
-@media (max-width:900px){.live{grid-template-columns:minmax(0,1fr)}}
-.card{background:var(--panel);border:1px solid var(--rule);border-radius:12px;padding:16px 18px;display:grid;gap:12px;min-width:0;align-content:start}
-.card .hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
-.ebars{display:grid;gap:10px}
-.ebar{display:grid;grid-template-columns:150px minmax(0,1fr) 110px;gap:12px;align-items:center}
-@media (max-width:520px){.ebar{grid-template-columns:1fr 90px} .ebar .trk{grid-column:1 / -1;order:3}}
-.ebar .lab{font-size:13px;color:var(--ink-2);display:flex;gap:8px;align-items:center}
-.ebar .lab i{width:10px;height:10px;border-radius:2px;flex:none}
-.ebar .trk{height:16px;background:var(--paper);border-radius:4px;overflow:hidden;border:1px solid var(--rule)}
-.ebar .fill{height:100%;width:0;border-radius:0 4px 4px 0}
-.ebar .val{font-family:var(--f-mono);font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
-.ebar .val small{color:var(--ink-3);font-size:11px}
-.etotal{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--rule);padding-top:10px;font-size:13px;color:var(--ink-2)}
-.etotal b{font-family:var(--f-mono);color:var(--ink);font-weight:600}
-.ncv{position:relative;height:230px}
-.ncv canvas{width:100%;height:100%;display:block}
-.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-2)}
-.legend span{display:inline-flex;gap:6px;align-items:center}
-.legend i{width:16px;height:0;border-top:2px solid;display:inline-block}
-
-/* ---------- plano ---------- */
-.build{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px}
-@media (max-width:1000px){.build{grid-template-columns:minmax(0,1fr)}}
-.plan{overflow-x:auto}
-.plan svg{display:block;width:100%;min-width:640px;height:auto}
-.cut{width:100%;border-collapse:collapse;font-size:13px}
-.cut td,.cut th{padding:7px 0;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top}
-.cut th{font-size:12px;color:var(--ink-3);font-weight:500}
-.cut td:last-child,.cut th:last-child{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:10px}
-.cut tr.tot td{font-weight:600;border-bottom:none}
-ol.steps{margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
-ol.steps b{color:var(--ink);font-weight:600}
-.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-
-/* ---------- tabla ---------- */
-.tablebox{background:var(--panel);border:1px solid var(--rule);border-radius:12px;overflow:hidden}
-.tablebar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--rule)}
-.scroll{overflow-x:auto}
-table.trials{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
-.trials th,.trials td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
-.trials th{font-weight:600;font-size:12px;color:var(--ink-2);background:var(--paper)}
-.trials th:first-child,.trials td:first-child,.trials th:nth-child(4),.trials td:nth-child(4){text-align:left}
-.trials td{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-.trials tbody tr{cursor:pointer} .trials tbody tr:hover td{background:var(--accent-soft)}
-.trials tbody tr.cur td{background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.trials tbody tr:last-child td{border-bottom:none}
-.pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--f-body);font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px}
-.pill.good{background:var(--good-soft);color:var(--good)} .pill.crit{background:var(--crit-soft);color:var(--crit)} .pill.warn{background:var(--warn-soft);color:var(--warn)}
-
-/* ---------- fuentes ---------- */
-.refs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
-@media (max-width:820px){.refs{grid-template-columns:minmax(0,1fr)}}
-.ref{font-size:13.5px;color:var(--ink-2);display:grid;gap:6px}
-.ref .apa{color:var(--ink);padding-left:22px;text-indent:-22px}
-.ref .apa a{color:var(--accent);word-break:break-all}
-ul.ass{margin:0;padding-left:18px;display:grid;gap:5px;color:var(--ink-2);font-size:13.5px}
-@media (prefers-reduced-motion: reduce){.step{transition:none}}
-</style>
-
-<div class="wrap">
-  <header>
-    <div class="eyebrow">Mecánica Clásica · UTP Huancayo · Avance del Proyecto Final</div>
-    <h1>¿Desde qué altura completa el loop el balín?</h1>
-    <p class="lead">Montaña rusa a escala con manguera de PVC transparente de ½" y un balín de acero de ⅜". La pizarra resuelve el problema con los números del montaje: primero la dinámica circular en la cima, luego la energía, y al final las pérdidas que la teoría ideal no ve.</p>
-  </header>
-
-  <section class="stage" id="stage" aria-label="Simulación">
-    <div class="main">
-      <div class="viewport" id="viewport">
-        <div class="labels" id="labels"></div>
-        <dl class="hud">
-          <dt>t</dt><dd id="hudT">0.000 s</dd>
-          <dt>v</dt><dd id="hudV">0.00 m/s</dd>
-          <dt>altura</dt><dd id="hudY">—</dd>
-          <dt>N / mg</dt><dd id="hudN">—</dd>
-        </dl>
-        <div class="status idle" id="status" role="status" aria-live="polite"></div>
-      </div>
-      <div class="toolbar">
-        <div class="group">
-          <button class="primary" id="btnPlay" type="button">Soltar balín</button>
-          <button id="btnReset" type="button">Reiniciar</button>
-          <span class="small">Cámara lenta</span>
-          <button type="button" class="spd" data-s="0.2" aria-pressed="false">0.2×</button>
-          <button type="button" class="spd" data-s="0.5" aria-pressed="true">0.5×</button>
-          <button type="button" class="spd" data-s="1" aria-pressed="false">1×</button>
-        </div>
-        <div class="group">
-          <button type="button" class="view" data-v="3d" aria-pressed="true">3D</button>
-          <button type="button" class="view" data-v="front" aria-pressed="false">Frontal</button>
-          <button type="button" class="view" data-v="side" aria-pressed="false">Lateral</button>
-          <button type="button" id="btnFollow" aria-pressed="false">Seguir balín</button>
-          <button type="button" id="btnFull">Pantalla completa</button>
-        </div>
-      </div>
-      <form class="controls" id="form" autocomplete="off">
-        <div class="ctl big">
-          <div class="row"><label for="inH">Altura de soltado h</label><output id="outH" for="inH"></output></div>
-          <input type="range" id="inH" min="8" max="60" step="0.1" value="36">
-          <div class="quick">
-            <button type="button" id="qTheo">h mín. teórica</button>
-            <button type="button" id="qSim">h mín. con pérdidas</button>
-            <button type="button" id="qLow">h baja (se despega)</button>
-          </div>
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="inR">Radio R</label><output id="outR" for="inR"></output></div>
-          <input type="range" id="inR" min="8" max="18" step="0.5" value="12">
-          <span class="small">medido hasta el canal donde rueda el balín</span>
-        </div>
-        <div class="ctl">
-          <div class="row"><label for="inMu">Pérdidas μ</label><output id="outMu" for="inMu"></output></div>
-          <input type="range" id="inMu" min="0" max="0.04" step="0.001" value="0.01">
-          <span class="small">resistencia a la rodadura; μ = 0 es la teoría ideal</span>
-        </div>
-        <div class="ctl">
-          <span class="lbl" id="lblModel">Modelo</span>
-          <div class="seg" role="radiogroup" aria-labelledby="lblModel">
-            <input type="radio" name="model" id="mRoll" value="0.4" checked><label for="mRoll">Esfera rueda<small>β = 2/5</small></label>
-            <input type="radio" name="model" id="mSlide" value="0"><label for="mSlide">Partícula<small>β = 0</small></label>
-          </div>
-        </div>
-      </form>
-      <details class="more" id="more">
-        <summary>Más parámetros del montaje</summary>
-        <div class="moregrid" id="form2">
-          <div class="fld"><label for="inD">Diámetro del balín</label>
-            <select id="inD">
-              <option value="6.35">6.35 mm (¼")</option>
-              <option value="7.94">7.94 mm (5⁄16")</option>
-              <option value="9.53" selected>9.53 mm (⅜")</option>
-              <option value="11.11">11.11 mm (7⁄16")</option>
-            </select></div>
-          <div class="fld"><label for="inMat">Material</label>
-            <select id="inMat"><option value="7850" selected>Acero · 7.85 g/cm³</option><option value="2500">Vidrio · 2.50 g/cm³</option></select></div>
-          <div class="fld"><label for="inID">Ø interior manguera (mm)</label><input type="number" id="inID" min="5" max="30" step="0.1" value="12.7"></div>
-          <div class="fld"><label for="inA">Ángulo de rampa (°)</label><input type="number" id="inA" min="25" max="65" step="1" value="50"></div>
-          <div class="fld"><label for="inG">g en Huancayo (m/s²)</label><input type="number" id="inG" min="9.70" max="9.85" step="0.001" value="9.775"></div>
-        </div>
-        <p class="note" id="fitNote"></p>
-      </details>
-    </div>
-
-    <aside class="board" id="pizarra" aria-label="Cálculo en vivo">
-      <div class="bh"><h3>Pizarra: cálculo en vivo</h3><span class="small">se actualiza con el montaje</span></div>
-      <div class="step" id="st1"></div>
-      <div class="step" id="st2"></div>
-      <div class="step" id="st3"></div>
-      <div class="step" id="st4"></div>
-      <div class="step" id="st5"></div>
-    </aside>
-  </section>
-
-  <section class="live" aria-label="Energía y fuerza normal">
-    <div class="card">
-      <div class="hd"><h3>Energía del balín, en tiempo real</h3><span class="small" id="eNote">mJ · referencia en la base del loop</span></div>
-      <div class="ebars" id="ebars">
-        <div class="ebar"><span class="lab"><i style="background:var(--s-ep)"></i>Potencial mgh</span><div class="trk"><div class="fill" style="background:var(--s-ep)"></div></div><span class="val"></span></div>
-        <div class="ebar"><span class="lab"><i style="background:var(--s-ekt)"></i>Cinética, avance</span><div class="trk"><div class="fill" style="background:var(--s-ekt)"></div></div><span class="val"></span></div>
-        <div class="ebar"><span class="lab"><i style="background:var(--s-ekr)"></i>Cinética, giro</span><div class="trk"><div class="fill" style="background:var(--s-ekr)"></div></div><span class="val"></span></div>
-        <div class="ebar"><span class="lab"><i style="background:var(--s-w)"></i>Perdida (fricción)</span><div class="trk"><div class="fill" style="background:var(--s-w)"></div></div><span class="val"></span></div>
-      </div>
-      <div class="etotal"><span>Suma de las cuatro barras</span><b id="eTot"></b></div>
-    </div>
-    <div class="card">
-      <div class="hd"><h3>Fuerza normal en el loop</h3><span class="small">N / mg según la posición ψ</span></div>
-      <div class="ncv"><canvas id="ncv" role="img" aria-label="Fuerza normal según la posición en el loop"></canvas></div>
-      <div class="legend"><span><i style="border-color:var(--s-ekt)"></i>Simulado, con pérdidas</span><span><i style="border-color:var(--ink-3);border-top-style:dashed"></i>Teoría sin pérdidas</span><span><i style="border-color:var(--crit);border-top-style:dotted"></i>N = 0: se despega</span></div>
-    </div>
-  </section>
-
-  <section style="display:grid;gap:16px" aria-label="Plano de construcción">
-    <div class="sechead">
-      <h2>Plano para armar la maqueta</h2>
-      <p>Es la misma geometría que usa la simulación, en centímetros y con origen en el punto más bajo del loop. La rampa se arma una sola vez hasta la altura máxima; en cada ensayo solo cambia el punto desde donde sueltas el balín.</p>
-    </div>
-    <div class="build">
-      <div class="card"><div class="plan" id="plan"></div></div>
-      <div class="card">
-        <h3>Cortes de manguera (Ø ½")</h3>
-        <table class="cut" id="cutlist"></table>
-        <h3 style="margin-top:6px">Armado</h3>
-        <ol class="steps" id="buildSteps"></ol>
-      </div>
-    </div>
-  </section>
-
-  <section style="display:grid;gap:16px" aria-label="Ensayos virtuales">
-    <div class="sechead">
-      <h2>Ensayos virtuales</h2>
-      <p>Barrido de alturas alrededor del valor teórico con el montaje actual. Haz clic en una fila para verla en el visor. Es la tabla de resultados del avance, y la misma que repetirán con la maqueta.</p>
-    </div>
-    <div class="tablebox">
-      <div class="tablebar"><span class="small" id="tblInfo"></span><button type="button" id="btnCopy">Copiar tabla</button></div>
-      <div class="scroll"><table class="trials" id="tbl">
-        <thead><tr><th>Ensayo</th><th>h (cm)</th><th>h / R</th><th>Resultado</th><th>v en la cima (m/s)</th><th>N en la cima / mg</th><th>Energía perdida</th></tr></thead>
-        <tbody></tbody>
-      </table></div>
-    </div>
-  </section>
-
-  <section style="display:grid;gap:16px" aria-label="Fuentes">
-    <div class="sechead"><h2>Antecedentes y supuestos</h2></div>
-    <div class="refs">
-      <div class="card ref">
-        <h3>Antecedentes</h3>
-        <p class="apa">Miljojković, J., Kocović, V., Košarac, A. y Šimunović, K. (2021). Loop-the-loop as a real tribomechanical system applicable in engineering education. <i>Tribology in Industry, 43</i>(4), 667–672. <a href="https://doi.org/10.24874/ti.1210.09.21.11" target="_blank" rel="noopener">https://doi.org/10.24874/ti.1210.09.21.11</a></p>
-        <p>Midieron con un balín de acero las pérdidas por fricción en un loop real y muestran que la regla h = 2.5R no alcanza: en la práctica hace falta h/R ≥ 2.7 o más.</p>
-        <p class="apa">da Silva, N. C. (2015). Looping: solução da lagrangiana, simulação computacional e estratégias didáticas. <i>Caderno Brasileiro de Ensino de Física, 32</i>(3), 963–987. <a href="https://doi.org/10.5007/2175-7941.2015v32n3p963" target="_blank" rel="noopener">https://doi.org/10.5007/2175-7941.2015v32n3p963</a></p>
-        <p>Deduce h = (2 + ½(1 + β))R para una esfera que rueda y el ángulo de desprendimiento, y los resuelve en una simulación. No incluye fricción; esta simulación sí.</p>
-      </div>
-      <div class="card ref">
-        <h3>Supuestos del modelo</h3>
-        <ul class="ass">
-          <li>El balín rueda sin deslizar y su centro sigue un círculo de radio R<sub>ef</sub> = R − r.</li>
-          <li>La pista es rígida: en la maqueta, la manguera va fija al tablero con cinchos y tacos.</li>
-          <li>Las pérdidas se modelan como una fuerza μN opuesta al movimiento; la resistencia del aire se desprecia.</li>
-          <li>Se integra (1 + β) dv/dt = −g sen θ − μN/m con Runge-Kutta de 4.º orden, paso de 0.2 ms. Con μ = 0 la energía se conserva con error menor a 10⁻⁶ J/kg.</li>
-        </ul>
-        <p class="small">Bibliografía base del curso: Serway, R. y Jewett, J., <i>Física para ciencias e ingeniería</i>, vol. 1 (Cengage).</p>
-      </div>
-    </div>
-  </section>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script>
-// ===== Modelo físico (se copia tal cual al HTML) =====
-const TAU = Math.PI * 2;
-
-function buildTrack(c) {
-  // c: { R (radio de la trayectoria del centro, m), alpha (rad), h (m), Rf, L1, L2, dz }
-  const { R, alpha: a, h } = c;
-  const Rf = c.Rf ?? 0.06, L1 = c.L1 ?? 0.06, L2 = c.L2 ?? 0.30, dz = c.dz ?? 0.03;
-  const sa = Math.sin(a), ca = Math.cos(a);
-  const x1 = -L1 - Rf * sa, y1 = Rf - Rf * ca;
-  const Linc = Math.max(0, (h - y1) / sa);
-  const x0 = x1 - Linc * ca, y0 = Math.max(h, y1);
-  const s1 = Linc, s2 = s1 + Rf * a, s3 = s2 + L1, s4 = s3 + TAU * R, s5 = s4 + L2;
-  function at(s) {
-    if (s < s1) { return { x: x0 + s * ca, y: y0 - s * sa, z: 0, th: -a, k: 0, seg: 0 }; }
-    if (s < s2) { const ph = -Math.PI / 2 - a + (s - s1) / Rf;
-      return { x: -L1 + Rf * Math.cos(ph), y: Rf + Rf * Math.sin(ph), z: 0, th: ph + Math.PI / 2, k: 1 / Rf, seg: 1 }; }
-    if (s < s3) { return { x: -L1 + (s - s2), y: 0, z: 0, th: 0, k: 0, seg: 2 }; }
-    if (s < s4) { const ps = (s - s3) / R;
-      return { x: R * Math.sin(ps), y: R * (1 - Math.cos(ps)), z: dz * ps / TAU, th: ps, k: 1 / R, seg: 3, psi: ps }; }
-    return { x: s - s4, y: 0, z: dz, th: 0, k: 0, seg: 4 };
-  }
-  return { s1, s2, s3, s4, s5, x0, y0, at, dz, L1, L2, Rf };
-}
-
-// c: { R, alpha, h, beta, mu, g, record, dt }
-function simulate(c) {
-  const tr = buildTrack(c);
-  const { beta, mu, g } = c;
-  const dt = c.dt ?? 2e-4;
-  const tMax = c.tMax ?? 8;
-  const rec = c.record;
-  const recEvery = rec ? Math.max(1, Math.round((1 / 240) / dt)) : 0;
-  const frames = [];
-  let s = 0, v = 0, t = 0, W = 0, step = 0; // W: energía perdida por unidad de masa (J/kg)
-  let W4 = null, maxPsi = 0, vBase = null, vTop = null, nTop = null, result = 'pendiente', detachPsi = null;
-  const loopN = []; // [psi, N/mg]
-
-  function f(s, v) {
-    const q = tr.at(s);
-    const Nm = v * v * q.k + g * Math.cos(q.th);
-    const fr = Nm > 0 ? mu * Nm * Math.sign(v) : 0;
-    return (-g * Math.sin(q.th) - fr) / (1 + beta);
-  }
-  function push(q, Nm) {
-    frames.push({ t, s, x: q.x, y: q.y, z: q.z, th: q.th, v, Nm, W, free: false, seg: q.seg });
-  }
-  let q = tr.at(0);
-  if (rec) push(q, g * Math.cos(q.th));
-
-  while (t < tMax) {
-    // RK4 en (s, v)
-    const k1s = v, k1v = f(s, v);
-    const k2s = v + 0.5 * dt * k1v, k2v = f(s + 0.5 * dt * k1s, v + 0.5 * dt * k1v);
-    const k3s = v + 0.5 * dt * k2v, k3v = f(s + 0.5 * dt * k2s, v + 0.5 * dt * k2v);
-    const k4s = v + dt * k3v, k4v = f(s + dt * k3s, v + dt * k3v);
-    const sN = s + dt / 6 * (k1s + 2 * k2s + 2 * k3s + k4s);
-    const vN = v + dt / 6 * (k1v + 2 * k2v + 2 * k3v + k4v);
-    // energía disipada en el paso (trapecio)
-    const qa = tr.at(s), Na = Math.max(0, v * v * qa.k + g * Math.cos(qa.th));
-    const qb = tr.at(sN), Nb = Math.max(0, vN * vN * qb.k + g * Math.cos(qb.th));
-    W += mu * 0.5 * (Na + Nb) * Math.abs(sN - s);
-    const prevV = v;
-    s = sN; v = vN; t += dt; step++;
-    q = qb;
-    const Nm = vN * vN * qb.k + g * Math.cos(qb.th);
-
-    if (q.seg <= 2 && vBase === null && s >= tr.s3 - 1e-9) vBase = Math.abs(v);
-    if (q.seg === 3) {
-      if (vBase === null) vBase = Math.abs(v);
-      if (q.psi > maxPsi) maxPsi = q.psi;
-      if (rec && v > 0 && (loopN.length === 0 || q.psi > loopN[loopN.length - 1][0] + 0.01)) loopN.push([q.psi, Nm / g]);
-      if (vTop === null && q.psi >= Math.PI && v > 0) { vTop = v; nTop = Nm / g; }
-      if (Nm < 0) { // se despega del riel
-        result = 'desprende'; detachPsi = q.psi;
-        if (rec) push(q, Nm);
-        if (rec) freeFall(q);
-        break;
-      }
-    }
-    if (rec && step % recEvery === 0) push(q, Nm);
-    if (s >= tr.s4 && result === 'pendiente') { result = 'completa'; W4 = W; if (!rec) break; }
-    if (s >= tr.s5) break;
-    if (prevV > 0 && v <= 0) {
-      if (result === 'pendiente') { result = 'retrocede'; if (!rec) break; }
-      else break; // se detuvo en la salida
-    }
-    if (s < 0) break;
-  }
-  if (result === 'pendiente') result = s >= tr.s4 ? 'completa' : 'retrocede';
-
-  function freeFall(q0) {
-    let x = q0.x, y = q0.y, z = q0.z;
-    let vx = v * Math.cos(q0.th), vy = v * Math.sin(q0.th);
-    const vz = c.dz0 ?? 0;
-    const fdt = 1 / 240;
-    let n = 0;
-    while (y > 0 && n < 400) {
-      vy -= g * fdt; x += vx * fdt; y += vy * fdt; t += fdt; n++;
-      frames.push({ t, s, x, y: Math.max(0, y), z, th: Math.atan2(vy, vx), v: Math.hypot(vx, vy), Nm: 0, W, free: true, seg: 3 });
-    }
-  }
-  return { result, frames, track: tr, W, W4: W4 ?? W, vBase, vTop, nTop, maxPsi, detachPsi, loopN, tEnd: t };
-}
-
-function hMinSim(c) {
-  const ok = (h) => simulate({ ...c, h, record: false, dt: 5e-4 }).result === 'completa';
-  let lo = 2 * c.R, hi = 8 * c.R;
-  if (!ok(hi)) return null;
-  for (let i = 0; i < 24; i++) { const mid = 0.5 * (lo + hi); if (ok(mid)) hi = mid; else lo = mid; }
-  return hi;
-}
-function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
-
-
-
-
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -604,6 +107,20 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   function highlight(id) {
     if (id === activeStep) return; activeStep = id;
     for (let i = 1; i <= 5; i++) $('st' + i).classList.toggle('on', ('st' + i) === id);
+    if (id) scrollToStep($(id));
+  }
+  // lleva el paso activo a la vista dentro del panel, sin mover la página
+  function scrollToStep(el) {
+    const box = $('sidePizarra');
+    if (box.hidden || box.scrollHeight <= box.clientHeight) return;
+    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 8;
+    box.scrollTo({ top, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  }
+  const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function stepBy(d) {
+    selectSide('pizarra');
+    const cur = activeStep ? +activeStep.slice(2) : 0;
+    highlight('st' + Math.max(1, Math.min(5, cur + d)));
   }
 
   const ICON = {
@@ -621,6 +138,7 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
 
   // ---------- energía en vivo ----------
   const ebarEls = [...document.querySelectorAll('#ebars .ebar')].map(el => ({ fill: el.querySelector('.fill'), val: el.querySelector('.val') }));
+  const stripEls = [...document.querySelectorAll('#estrip .bar i')];
   let rotFrozen = null;
   function updateEnergy(f) {
     const mJ = mass * 1000, E0 = S.g * S.h * mJ;
@@ -630,6 +148,7 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
     vals.forEach((v, i) => {
       const pct = Math.max(0, Math.min(100, v / E0 * 100));
       ebarEls[i].fill.style.width = pct + '%';
+      stripEls[i].style.width = pct + '%';
       ebarEls[i].val.innerHTML = `${v.toFixed(2)} <small>mJ · ${pct.toFixed(0)}%</small>`;
     });
     $('eTot').textContent = vals.reduce((a, b) => a + b, 0).toFixed(2) + ' mJ = mgh';
@@ -735,6 +254,7 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
     s += `<text x="${X(cm(L2))}" y="${+Y(0) + 34}" fill="${ink3}" text-anchor="end">salida (${(dz * 100).toFixed(0)} cm delante del tablero)</text>`;
     s += '</svg>';
     $('plan').innerHTML = s;
+    $('planInfo').textContent = `Calculado con el montaje del simulador: R = ${cm(S.R).toFixed(1)} cm, balín de ${(S.d * 1000).toFixed(2)} mm, manguera de ${(S.ID * 1000).toFixed(1)} mm y rampa a ${Math.round(deg(S.alpha))}°. Si cambias esos valores, el plano se actualiza.`;
 
     // lista de cortes (por el eje de la manguera)
     const off = Math.max(0, S.ID / 2 - S.d / 2);
@@ -772,8 +292,8 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   }
   $('tbl').addEventListener('click', (e) => {
     const tr = e.target.closest('tr[data-h]'); if (!tr) return;
+    location.hash = '#simulador'; showView('simulador');
     $('inH').value = (+tr.dataset.h * 100).toFixed(1); recompute(); play();
-    $('stage').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   });
   $('btnCopy').addEventListener('click', () => {
     const head = ['Ensayo', 'h (cm)', 'h/R', 'Resultado', 'v cima (m/s)', 'N cima/mg', 'Energía perdida (%)'];
@@ -790,7 +310,7 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   const vp = $('viewport'), labelsEl = $('labels');
   let renderer, scene, camera, controls, keyLight, glOK = false, dirty = true;
   let trackGroup, boardGroup, ball, gate, trail, trailPos, trailCount = 0, ballMark = null;
-  let mats = {}, labels = [], view = '3d', fitInfo = null, follow = false;
+  let mats = {}, labels = [], view = '3d', fitInfo = null, follow = false, pendingFit = false;
 
   function initGL() {
     if (typeof THREE === 'undefined') { vp.insertAdjacentHTML('beforeend', '<div class="nogl">No se pudo cargar el motor 3D. Revisa tu conexión y recarga la página. La pizarra, el plano y la tabla siguen funcionando.</div>'); return; }
@@ -824,7 +344,7 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
     trail = new THREE.Line(tg, mats.trail); scene.add(trail);
     gate = new THREE.Mesh(new THREE.BoxGeometry(0.0015, 0.026, 0.03), mats.gate); gate.castShadow = true; scene.add(gate);
     controls.addEventListener('change', () => { dirty = true; });
-    new ResizeObserver(() => { resize(); dirty = true; }).observe(vp);
+    new ResizeObserver(() => { resize(); if (pendingFit) setView(view); dirty = true; }).observe(vp);
     applyTheme();
   }
   function ballTexture() {
@@ -973,8 +493,11 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   }
   function setView(v) {
     view = v; if (follow) toggleFollow(false);
-    document.querySelectorAll('.view').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
+    document.querySelectorAll('.view-btn').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false'));
     if (!glOK || !fitInfo) return;
+    // con el visor oculto (otra pestaña) no hay tamaño: se encuadra al volver a mostrarse
+    pendingFit = !vp.clientWidth || !vp.clientHeight;
+    if (pendingFit) return;
     const asp = vp.clientWidth / Math.max(1, vp.clientHeight), fov = camera.fov * Math.PI / 180;
     const dist = Math.max(fitInfo.h, fitInfo.w / asp) / 2 / Math.tan(fov / 2) * 1.2;
     const t = new THREE.Vector3(fitInfo.cx, fitInfo.cy, 0.01);
@@ -983,13 +506,14 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   function toggleFollow(on) {
     follow = on === undefined ? !follow : on;
     $('btnFollow').setAttribute('aria-pressed', follow ? 'true' : 'false');
-    if (follow) document.querySelectorAll('.view').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    if (follow) document.querySelectorAll('.view-btn').forEach(b => b.setAttribute('aria-pressed', 'false'));
     dirty = true;
   }
   function resize() {
     if (!glOK) return;
     const w = vp.clientWidth, h = vp.clientHeight;
-    renderer.setSize(w, h, false); camera.aspect = w / Math.max(1, h); camera.updateProjectionMatrix();
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   }
 
   // ---------- reproducción ----------
@@ -1059,7 +583,7 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
       camera.position.lerp(want, 0.08); dirty = true;
     }
     if (controls.update()) dirty = true;
-    if (dirty) { renderer.render(scene, camera); updateLabels(); dirty = false; }
+    if (dirty && currentView === 'simulador') { renderer.render(scene, camera); updateLabels(); dirty = false; }
   }
 
   // ---------- eventos ----------
@@ -1072,16 +596,21 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   document.querySelectorAll('.spd').forEach(b => b.addEventListener('click', () => {
     speed = +b.dataset.s; document.querySelectorAll('.spd').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
   }));
-  document.querySelectorAll('.view').forEach(b => b.addEventListener('click', () => setView(b.dataset.v)));
+  document.querySelectorAll('.view-btn').forEach(b => b.addEventListener('click', () => setView(b.dataset.v)));
   $('btnFollow').addEventListener('click', () => toggleFollow());
-  $('btnFull').addEventListener('click', () => {
-    const el = $('stage');
+  $('btnMore').addEventListener('click', () => {
+    const open = $('more').hidden; $('more').hidden = !open; $('btnMore').setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  // pantalla completa de toda la app: la página ya cabe en una pantalla, así se quita la barra del navegador
+  function toggleFull() {
+    const el = document.documentElement;
     try {
       if (document.fullscreenElement) document.exitFullscreen();
       else if (el.requestFullscreen) el.requestFullscreen().catch(() => { $('btnFull').textContent = 'No disponible aquí'; });
       else $('btnFull').textContent = 'No disponible aquí';
     } catch (e) { $('btnFull').textContent = 'No disponible aquí'; }
-  });
+  }
+  $('btnFull').addEventListener('click', toggleFull);
   document.addEventListener('fullscreenchange', () => { $('btnFull').textContent = document.fullscreenElement ? 'Salir de pantalla completa' : 'Pantalla completa'; setTimeout(() => { resize(); setView(view); }, 80); });
   const setH = (h) => { if (!h) return; $('inH').value = (Math.ceil(h * 1000) / 10).toFixed(1); recompute(); play(); };
   $('qTheo').addEventListener('click', () => setH(hTheo));
@@ -1090,6 +619,73 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   const mq = window.matchMedia('(prefers-color-scheme: dark)');
   (mq.addEventListener ? mq.addEventListener('change', applyTheme) : mq.addListener(applyTheme));
   new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  // ---------- tema claro / oscuro (el claro se ve mejor en proyector) ----------
+  const curTheme = () => document.documentElement.dataset.theme || (mq.matches ? 'dark' : 'light');
+  const themeLabel = () => { $('btnTheme').textContent = curTheme() === 'dark' ? 'Modo claro' : 'Modo oscuro'; };
+  $('btnTheme').addEventListener('click', () => {
+    const t = curTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem('loop-theme', t); } catch (e) {}
+    themeLabel();
+  });
+  (mq.addEventListener ? mq.addEventListener('change', themeLabel) : mq.addListener(themeLabel));
+  themeLabel();
+
+  // ---------- panel lateral: pizarra / energía ----------
+  function selectSide(which) {
+    const piz = which === 'pizarra';
+    $('tabPizarra').setAttribute('aria-selected', piz ? 'true' : 'false');
+    $('tabEnergia').setAttribute('aria-selected', piz ? 'false' : 'true');
+    $('sidePizarra').hidden = !piz; $('sideEnergia').hidden = piz;
+    $('zOut').parentElement.style.visibility = piz ? '' : 'hidden';
+    if (piz && activeStep) scrollToStep($(activeStep));
+  }
+  $('tabPizarra').addEventListener('click', () => selectSide('pizarra'));
+  $('tabEnergia').addEventListener('click', () => selectSide('energia'));
+  $('estrip').addEventListener('click', () => selectSide('energia'));
+  $('pizarra').addEventListener('click', (e) => {
+    const st = e.target.closest('.step'); if (!st || getSelection().toString()) return;
+    highlight(st.id === activeStep ? null : st.id);
+  });
+  let boardZoom = 1;
+  try { boardZoom = Math.min(1.6, Math.max(0.8, +localStorage.getItem('loop-zoom') || 1)); } catch (e) {}
+  const setZoom = (z) => {
+    boardZoom = Math.round(Math.min(1.6, Math.max(0.8, z)) * 10) / 10;
+    $('pizarra').style.setProperty('--bz', boardZoom);
+    try { localStorage.setItem('loop-zoom', boardZoom); } catch (e) {}
+  };
+  $('zIn').addEventListener('click', () => setZoom(boardZoom + 0.1));
+  $('zOut').addEventListener('click', () => setZoom(boardZoom - 0.1));
+  setZoom(boardZoom);
+
+  // ---------- pestañas (Simulador · Ensayos · Maqueta · Fuentes) ----------
+  const VIEWS = ['simulador', 'ensayos', 'maqueta', 'fuentes'];
+  let currentView = null;
+  function showView(name) {
+    if (!VIEWS.includes(name)) name = 'simulador';
+    if (name === currentView) return;
+    currentView = name;
+    for (const v of VIEWS) $('view-' + v).hidden = v !== name;
+    document.querySelectorAll('.tabs a').forEach(a => a.dataset.view === name ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    dirty = true;
+  }
+  window.addEventListener('hashchange', () => showView(location.hash.slice(1)));
+  showView(location.hash.slice(1));
+
+  // ---------- teclado: también responde a los punteros de presentación (AvPág / RePág) ----------
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target, tag = t.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || t.isContentEditable) return;
+    const k = e.key;
+    if (k === 'f' || k === 'F') { toggleFull(); e.preventDefault(); return; }
+    if (currentView !== 'simulador') return;
+    if (k === ' ' && tag !== 'BUTTON' && tag !== 'A') { playing ? pause() : play(); e.preventDefault(); }
+    else if (k === 'r' || k === 'R') resetPlayback();
+    else if (k === 'ArrowRight' || k === 'PageDown') { stepBy(1); e.preventDefault(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp') { stepBy(-1); e.preventDefault(); }
+  });
 
   // ---------- control externo (capturas para el informe) ----------
   window.__loopDemo = {
@@ -1104,8 +700,5 @@ function hMinTheo(R, beta) { return 2 * R + 0.5 * (1 + beta) * R; }
   // ---------- arranque ----------
   initGL();
   recompute();
-  if (glOK) { resize(); setView('3d'); requestAnimationFrame(tick); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) setTimeout(play, 800); }
+  if (glOK) { resize(); setView('3d'); requestAnimationFrame(tick); if (currentView === 'simulador' && !reduceMotion()) setTimeout(play, 800); }
 })();
-</script>
-
-</body></html>
